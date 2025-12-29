@@ -34,35 +34,35 @@ Imports ChatGPT conversation exports into your Obsidian vault as markdown files.
 
 ---
 
-### 2. `raw_log.js` - Claude Code Session Logger (Hook)
+### 2. `raw_log.js` - Claude Code Session Logger
 
-A Claude Code hook that saves full conversation transcripts to Obsidian when sessions end.
+Converts Claude Code JSONL transcripts to readable Obsidian markdown.
 
 **Installation:**
 
-1. Copy to your Claude hooks directory:
+1. Copy to a convenient location:
    ```bash
+   mkdir -p ~/.claude/hooks
    cp raw_log.js ~/.claude/hooks/
    ```
 
-2. Add to your Claude settings (`.claude/settings.json`):
-   ```json
-   {
-     "hooks": {
-       "Stop": [
-         {
-           "type": "command",
-           "command": "echo '$CLAUDE_HOOK_INPUT' | node ~/.claude/hooks/raw_log.js"
-         }
-       ]
-     }
-   }
-   ```
+2. Edit the script to set your vault path at the top.
 
-3. Edit the script to set your vault path at the top.
+**Usage (run manually):**
+
+```bash
+# Find your latest transcript and export it
+TRANSCRIPT=$(ls -t ~/.claude/projects/-home-*/*.jsonl | grep -v agent | head -1)
+SESSION_ID=$(basename "$TRANSCRIPT" .jsonl)
+echo "{\"session_id\":\"$SESSION_ID\",\"transcript_path\":\"$TRANSCRIPT\"}" | node ~/.claude/hooks/raw_log.js
+```
+
+Or as a one-liner alias in your `.bashrc`/`.zshrc`:
+```bash
+alias claude-export='TRANSCRIPT=$(ls -t ~/.claude/projects/-home-*/*.jsonl | grep -v agent | head -1) && SESSION_ID=$(basename "$TRANSCRIPT" .jsonl) && echo "{\"session_id\":\"$SESSION_ID\",\"transcript_path\":\"$TRANSCRIPT\"}" | node ~/.claude/hooks/raw_log.js'
+```
 
 **What it does:**
-- Triggers on session end (Stop hook)
 - Reads the JSONL transcript file
 - Converts to readable markdown with:
   - Collapsible tool calls
