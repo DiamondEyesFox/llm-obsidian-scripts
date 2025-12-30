@@ -9,12 +9,17 @@
  * Uses transcript_path to capture BOTH user AND assistant messages
  *
  * Location: LLM Logs/Claude Code Logs/YYYY/MM-Month/DD/
+ *
+ * SYNC FEATURE: Also syncs any missing sessions from the JSONL directory
+ * Every export also catches up on any sessions that weren't exported previously
  */
 
 const fs = require('fs');
 const path = require('path');
 
-const VAULT_BASE = '/home/diamondeyesfox/Documents/DEF Master Vault/Master Vault/My Dashboard/Archives Dashboard/LLM Logs/Claude Code Logs';
+// CONFIGURE THESE PATHS FOR YOUR SETUP
+const VAULT_BASE = '{{VAULT_PATH}}/My Dashboard/Archives Dashboard/LLM Logs/Claude Code Logs';
+const JSONL_SOURCE = '{{HOME}}/.claude/projects/{{PROJECT_DIR}}';
 
 // Read JSON input from stdin
 let input = '';
@@ -26,6 +31,12 @@ process.stdin.on('end', () => {
     // Only process on SessionEnd or Stop - when we have complete conversation
     if (data.hook_event_name === 'SessionEnd' || data.hook_event_name === 'Stop') {
       logFullTranscript(data);
+
+      // Sync any missing sessions from the JSONL directory
+      const synced = syncAllSessions();
+      if (synced > 0) {
+        console.log(`Synced ${synced} missing session(s) to vault`);
+      }
     }
 
     process.exit(0);
@@ -298,4 +309,73 @@ function smartTruncate(content) {
 
   // For medium content, just truncate
   return content.slice(0, 800) + `\n\n... [${content.length - 800} chars truncated]`;
+}
+
+/**
+ * Sync all sessions - find any JSONL files not yet exported and export them
+ * Returns count of newly synced sessions
+ */
+function syncAllSessions() {
+  if (!fs.existsSync(JSONL_SOURCE)) {
+    return 0;
+  }
+
+  // Get all exported session IDs from vault (scan all date folders)
+  const exportedIds = new Set();
+
+  function scanVaultDir(dir) {
+    if (!fs.existsSync(dir)) return;
+
+    const entries = fs.readdirSync(dir, { withFileTypes: true });
+    for (const entry of entries) {
+      if (entry.isDirectory()) {
+        scanVaultDir(path.join(dir, entry.name));
+      } else if (entry.name.endsWith('.md') && entry.name.includes('_Session_')) {
+        // Extract session ID from filename (last part before .md)
+        const match = entry.name.match(/_([a-f0-9]{8})\.md$/);
+        if (match) {
+          exportedIds.add(match[1]);
+        }
+      }
+    }
+  }
+
+  scanVaultDir(VAULT_BASE);
+
+  // Get all JSONL files (excluding agent files and empty files)
+  const jsonlFiles = fs.readdirSync(JSONL_SOURCE)
+    .filter(f => f.endsWith('.jsonl') && !f.startsWith('agent-'));
+
+  let syncedCount = 0;
+
+  for (const jsonlFile of jsonlFiles) {
+    const sessionId = path.basename(jsonlFile, '.jsonl');
+    const shortId = sessionId.slice(0, 8);
+
+    // Skip if already exported
+    if (exportedIds.has(shortId)) {
+      continue;
+    }
+
+    const transcriptPath = path.join(JSONL_SOURCE, jsonlFile);
+
+    // Skip empty files
+    const stat = fs.statSync(transcriptPath);
+    if (stat.size === 0) {
+      continue;
+    }
+
+    // Export this missing session
+    try {
+      logFullTranscript({
+        session_id: sessionId,
+        transcript_path: transcriptPath
+      });
+      syncedCount++;
+    } catch (err) {
+      console.error(`Failed to sync ${sessionId}:`, err.message);
+    }
+  }
+
+  return syncedCount;
 }

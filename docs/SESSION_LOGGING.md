@@ -56,10 +56,29 @@ This system uses **dual logging** - two complementary approaches for different p
 
 **Raw Transcripts:** Requires manual export. The hook system doesn't auto-trigger on session end (known limitation).
 
+## Sync Feature
+
+The `raw_log.js` script includes automatic sync:
+
+- When you export, it **also syncs any missing sessions**
+- Scans all JSONL files in your Claude projects directory
+- Compares against exported files in vault
+- Exports any that are missing
+
+**Result:** Run the export once, get all your sessions. No gaps accumulate.
+
+```
+# First run might sync many:
+Synced 85 missing session(s) to vault
+
+# Subsequent runs:
+(no output = already synced)
+```
+
 ## Workflow
 
 1. **During session:** Claude logs summaries per CLAUDE.md
-2. **After session:** Run `claude-export` alias to save raw transcript
+2. **After session:** Run `claude-export` alias to save raw transcript (also syncs any missed sessions)
 3. **Next session:** Claude reads previous session log for context
 
 ## Tips
